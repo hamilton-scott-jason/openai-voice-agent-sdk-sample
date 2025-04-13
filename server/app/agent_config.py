@@ -4,41 +4,31 @@ from agents import Agent, WebSearchTool, function_tool
 from agents.tool import UserLocation
 
 import app.mock_api as mock_api
-
-STYLE_INSTRUCTIONS = "Use a frustrated, demanding tone that includes metaphors to convey your disdain and write in a chat style without formal formatting or lists and do not use any emojis.  Occasionally stutter the beginning of your sentence, and throw in common filler words where appropriate."
-
-
-@function_tool
-def get_past_orders():
-    return json.dumps(mock_api.get_past_orders())
+from app.config import AGENT_NAME, AGENT_MODEL, AGENT_INSTRUCTIONS, STYLE_INSTRUCTIONS
 
 
-@function_tool
-def submit_refund_request(order_number: str):
-    """Confirm with the user first"""
-    return mock_api.submit_refund_request(order_number)
+# @function_tool
+# def get_past_orders():
+#     return json.dumps(mock_api.get_past_orders())
 
 
-customer_support_agent = Agent(
-    name="Customer Support Agent",
-    instructions=f"You are a customer support assistant. {STYLE_INSTRUCTIONS}",
-    model="gpt-4o-mini",
-    tools=[get_past_orders, submit_refund_request],
+# @function_tool
+# def submit_refund_request(order_number: str):
+#     """Confirm with the user first"""
+#     return mock_api.submit_refund_request(order_number)
+
+
+# Create a single agent with all available tools
+voice_agent = Agent(
+    name=AGENT_NAME,
+    instructions=f"{AGENT_INSTRUCTIONS} {STYLE_INSTRUCTIONS}",
+    model=AGENT_MODEL,
+    tools=[
+        # get_past_orders,
+        # submit_refund_request,
+        # WebSearchTool(user_location=UserLocation(type="approximate", city="Tokyo")),
+    ],
 )
 
-stylist_agent = Agent(
-    name="Stylist Agent",
-    model="gpt-4o-mini",
-    instructions=f"You are a stylist assistant. {STYLE_INSTRUCTIONS}",
-    tools=[WebSearchTool(user_location=UserLocation(type="approximate", city="Tokyo"))],
-    handoffs=[customer_support_agent],
-)
-
-triage_agent = Agent(
-    name="Triage Agent",
-    model="gpt-4o-mini",
-    instructions=f"Route the user to the appropriate agent based on their request. {STYLE_INSTRUCTIONS}",
-    handoffs=[stylist_agent, customer_support_agent],
-)
-
-starting_agent = triage_agent
+# Use the voice agent as the starting agent
+starting_agent = voice_agent

@@ -11,6 +11,7 @@ from agents.voice import (
     VoiceWorkflowBase,
 )
 from app.agent_config import starting_agent
+from app.config import VOICE_ID, VOICE_BUFFER_SIZE, VOICE_INSTRUCTIONS, VOICE_SPEED
 from app.utils import (
     WebsocketHelper,
     concat_audio_chunks,
@@ -115,14 +116,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     workflow=workflow,
                     config=VoicePipelineConfig(
                         tts_settings=TTSModelSettings(
-                            voice="sage",
-                            buffer_size=512,
+                            voice=VOICE_ID,
+                            buffer_size=VOICE_BUFFER_SIZE,
                             transform_data=transform_data,
-                            instructions="""Voice: Shrill, loud, and unprofessional.
-
-                            Punctuation: Quick and clean.
-
-                            Delivery: Angry and impatient, full of exasperated sounds.""",
+                            instructions=VOICE_INSTRUCTIONS,
+                            speed=VOICE_SPEED,
                         )
                     ),
                 ).run(audio_input)

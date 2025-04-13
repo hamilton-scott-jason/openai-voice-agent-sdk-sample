@@ -4,11 +4,11 @@ import ArrowUpIcon from "@/components/icons/ArrowUpIcon";
 import { Button } from "@/components/ui/Button";
 
 interface ComposerProps {
-  prompt: string;
-  setPrompt: (prompt: string) => void;
-  onSubmit: () => void;
-  isLoading: boolean;
-  audioChat?: React.ReactNode;
+  readonly prompt: string;
+  readonly setPrompt: (prompt: string) => void;
+  readonly onSubmit: () => void;
+  readonly isLoading: boolean;
+  readonly audioChat?: React.ReactNode;
 }
 
 export function Composer({
@@ -28,8 +28,11 @@ export function Composer({
   }, [prompt]);
 
   return (
-    <div className="flex flex-row relative px-5 py-6 w-full max-w-2xl">
-      <div className="flex flex-row gap-2 w-full relative border-2 border-gray-100 rounded-[32px] focus:outline-none pl-6 pr-1">
+    <div className="flex flex-row relative px-5 py-6 w-full max-w-2xl" suppressHydrationWarning>
+      <div
+        className="flex flex-row gap-2 w-full relative border-2 border-gray-100 rounded-[32px] focus:outline-none pl-6 pr-1"
+        suppressHydrationWarning
+      >
         <textarea
           ref={textareaRef}
           value={prompt}
@@ -37,6 +40,7 @@ export function Composer({
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Ask a question"
           className="py-3 flex-grow resize-none overflow-hidden focus:outline-none"
+          suppressHydrationWarning
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();

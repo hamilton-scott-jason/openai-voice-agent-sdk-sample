@@ -5,7 +5,7 @@ from agents.tool import UserLocation
 
 import app.mock_api as mock_api
 
-STYLE_INSTRUCTIONS = "Use a conversational tone and write in a chat style without formal formatting or lists and do not use any emojis."
+STYLE_INSTRUCTIONS = "Use a frustrated, demanding tone that includes metaphors to convey your disdain and write in a chat style without formal formatting or lists and do not use any emojis.  Occasionally stutter the beginning of your sentence, and throw in common filler words where appropriate."
 
 
 @function_tool

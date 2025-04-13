@@ -44,6 +44,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class Workflow(VoiceWorkflowBase):
     def __init__(self, connection: WebsocketHelper):
         self.connection = connection
@@ -114,7 +115,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     workflow=workflow,
                     config=VoicePipelineConfig(
                         tts_settings=TTSModelSettings(
-                            buffer_size=512, transform_data=transform_data
+                            voice="sage",
+                            buffer_size=512,
+                            transform_data=transform_data,
+                            instructions="""Voice: Shrill, loud, and unprofessional.
+
+                            Punctuation: Quick and clean.
+
+                            Delivery: Angry and impatient, full of exasperated sounds.""",
                         )
                     ),
                 ).run(audio_input)

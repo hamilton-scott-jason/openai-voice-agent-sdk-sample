@@ -6,12 +6,13 @@ import { Composer } from "@/components/Composer";
 import { Header } from "@/components/Header";
 import { useAudio } from "@/hooks/useAudio";
 import { useWebsocket } from "@/hooks/useWebsocket";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import "./styles.css";
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
+  const [initComplete, setInitComplete] = useState(false);
 
   const {
     isReady: audioIsReady,
@@ -21,7 +22,9 @@ export default function Home() {
     stopPlaying,
     frequencies,
     playbackFrequencies,
+    isPlayingAudio
   } = useAudio();
+
   const {
     isReady: websocketReady,
     sendAudioMessage,
@@ -34,12 +37,34 @@ export default function Home() {
     onNewAudio: playAudio,
   });
 
+  // Debug app initialization
+  useEffect(() => {
+    console.log('[DEBUG App] Component mounting - audioIsReady:', audioIsReady);
+    console.log('[DEBUG App] Component mounting - websocketReady:', websocketReady);
+
+    if (audioIsReady && websocketReady && !initComplete) {
+      console.log('[DEBUG App] App fully initialized - all services ready');
+      setInitComplete(true);
+    }
+
+    return () => {
+      console.log('[DEBUG App] Component unmounting');
+    };
+  }, [audioIsReady, websocketReady, initComplete]);
+
+  // Debug for audio playback state changes
+  useEffect(() => {
+    console.log('[DEBUG App] Audio playback state changed:', isPlayingAudio);
+  }, [isPlayingAudio]);
+
   function handleSubmit() {
+    console.log('[DEBUG App] Text submission triggered');
     setPrompt("");
     sendTextMessage(prompt);
   }
 
   async function handleStopPlaying() {
+    console.log('[DEBUG App] Stop playing triggered');
     await stopPlaying();
   }
 
@@ -64,6 +89,7 @@ export default function Home() {
             startRecording={startRecording}
             stopRecording={stopRecording}
             sendAudioMessage={sendAudioMessage}
+            isPlayingAudio={isPlayingAudio}
           />
         }
       />

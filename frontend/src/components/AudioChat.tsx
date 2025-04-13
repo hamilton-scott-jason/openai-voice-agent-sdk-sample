@@ -7,7 +7,8 @@ import ArrowUpIcon from "@/components/icons/ArrowUpIcon";
 import MicIcon from "@/components/icons/MicIcon";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/utils";
-import { AudioEvents, eventEmitter } from "@/lib/eventEmitter";
+import { eventEmitter } from "@/lib/eventEmitter";
+import CloseIcon from "./icons/CloseIcon";
 
 interface AudioChatProps {
   startRecording: () => Promise<void>;
@@ -16,6 +17,8 @@ interface AudioChatProps {
   isReady: boolean;
   frequencies: number[];
   isPlayingAudio?: boolean;
+  isRecording: boolean;  // Controlled by parent
+  setIsRecording: (recording: boolean) => void;  // Controlled by parent
 }
 
 const AudioChat = ({
@@ -25,22 +28,14 @@ const AudioChat = ({
   sendAudioMessage,
   frequencies,
   isPlayingAudio = false,
+  isRecording,
+  setIsRecording,
 }: AudioChatProps) => {
-  const [isRecording, setIsRecording] = useState(false);
   const [hasSpoken, setHasSpoken] = useState(false); // Track if user has spoken
   const silenceStartTime = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);  // Keep a ref for the timer to avoid cleanup issues
   const [isMounted, setIsMounted] = useState(false); // Add this to track client-side rendering
-  const wasPlayingAudio = useRef(false); // Track previous audio state
-  const autoRecordingEnabled = useRef(true); // Track if auto-recording is enabled
-  const componentRenderCount = useRef(0); // For debugging renders
-  const isRecordingRef = useRef(false); // Use ref to avoid closure issues
-  const unsubscribeRef = useRef<(() => void) | null>(null); // Store event unsubscribe function
-
-  // Update ref whenever isRecording changes to keep it fresh
-  useEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Configure silence detection parameters
   const SILENCE_THRESHOLD = 0.2; // Threshold for what constitutes silence
@@ -48,78 +43,30 @@ const AudioChat = ({
 
   // Ensure we're only running client-side code after hydration
   useEffect(() => {
-    componentRenderCount.current += 1;
-    console.log(`[DEBUG AudioChat] Component render #${componentRenderCount.current}`);
-    console.log('[DEBUG AudioChat] Initial render state - isRecording:', isRecording);
-    console.log('[DEBUG AudioChat] Initial render state - isPlayingAudio:', isPlayingAudio);
-    console.log('[DEBUG AudioChat] Initial render state - isMounted:', isMounted);
+    console.log(`[DEBUG AudioChat] Component mounted - isRecording:`, isRecording);
+    setIsMounted(true);
 
-    if (!isMounted) {
-      setIsMounted(true);
-      console.log('[DEBUG AudioChat] Component mounted');
-    }
-  });
-
-  // Subscribe to the PLAYBACK_ENDED event instead of using a callback prop
-  useEffect(() => {
-    if (isMounted) {
-      console.log('[DEBUG AudioChat] Setting up audio playback ended event listener');
-
-      // Define the event handler
-      const handleAudioPlaybackEnded = async () => {
-        console.log('[DEBUG AudioChat] Audio playback ended event received');
-        console.log('[DEBUG AudioChat] Current state - isReady:', isReady);
-        console.log('[DEBUG AudioChat] Current state - isRecording (from ref):', isRecordingRef.current);
-        console.log('[DEBUG AudioChat] Current state - autoRecordingEnabled:', autoRecordingEnabled.current);
-
-        if (isReady && !isRecordingRef.current && autoRecordingEnabled.current) {
-          console.log('[DEBUG AudioChat] Attempting to auto-start recording after audio ended');
-          try {
-            await startRecording();
-            console.log('[DEBUG AudioChat] Auto-recording successfully started');
-            setIsRecording(true);
-            setHasSpoken(false);
-          } catch (error) {
-            console.error('[DEBUG AudioChat] Error starting auto-recording:', error);
-          }
-        } else {
-          console.log('[DEBUG AudioChat] Skipping auto-recording - conditions not met');
-          console.log('[DEBUG AudioChat] - isReady:', isReady);
-          console.log('[DEBUG AudioChat] - !isRecordingRef.current:', !isRecordingRef.current);
-          console.log('[DEBUG AudioChat] - autoRecordingEnabled.current:', autoRecordingEnabled.current);
-        }
-      };
-
-      // Subscribe to the event
-      const unsubscribe = eventEmitter.on(AudioEvents.PLAYBACK_ENDED, handleAudioPlaybackEnded);
-      unsubscribeRef.current = unsubscribe;
-
-      // Clean up the event listener when the component unmounts
-      return () => {
-        console.log('[DEBUG AudioChat] Cleaning up event listener');
-        if (unsubscribeRef.current) {
-          unsubscribeRef.current();
-          unsubscribeRef.current = null;
-        }
-      };
-    }
-  }, [isMounted, isReady, startRecording]);
-
-  // Track audio playback state changes
-  useEffect(() => {
-    if (isMounted) {
-      console.log('[DEBUG AudioChat] Audio playback state changed:', isPlayingAudio);
-      console.log('[DEBUG AudioChat] Previous audio state:', wasPlayingAudio.current);
-
-      if (wasPlayingAudio.current && !isPlayingAudio) {
-        console.log('[DEBUG AudioChat] Audio playback transition from playing to stopped');
-      } else if (!wasPlayingAudio.current && isPlayingAudio) {
-        console.log('[DEBUG AudioChat] Audio playback transition from stopped to playing');
+    // Set up event listener for speech detection reset
+    const unsubscribe = eventEmitter.on('app:reset_speech_detection', () => {
+      console.log('[DEBUG AudioChat] Received reset speech detection event');
+      setHasSpoken(false);
+      silenceStartTime.current = null;
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
+    });
 
-      wasPlayingAudio.current = isPlayingAudio;
-    }
-  }, [isPlayingAudio, isMounted]);
+    unsubscribeRef.current = unsubscribe;
+
+    return () => {
+      console.log('[DEBUG AudioChat] Component unmounting');
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
   // Helper function to detect silence from frequency data
   const isSilent = (freqs: number[]): boolean => {
@@ -137,6 +84,11 @@ const AudioChat = ({
 
     console.log('[DEBUG AudioChat] Recording state changed:', isRecording);
 
+    // Reset hasSpoken when starting new recording sessions
+    if (isRecording && !isPlayingAudio) {
+      console.log('[DEBUG AudioChat] New recording session - resetting hasSpoken state if needed');
+    }
+
     // Only set up cleanup when recording is active
     if (isRecording) {
       console.log(`[DEBUG AudioChat] Recording active - setup cleanup effect`);
@@ -151,7 +103,7 @@ const AudioChat = ({
         }
       };
     }
-  }, [isRecording, isMounted]);
+  }, [isRecording, isMounted, isPlayingAudio]);
 
   // Separate effect for silence detection that doesn't clean up on frequency changes
   useEffect(() => {
@@ -180,7 +132,7 @@ const AudioChat = ({
     if (isCurrentlySilent && silenceStartTime.current === null) {
       // Silence just started
       silenceStartTime.current = Date.now();
-      console.log(`[DEBUG AudioChat] Silence detected - starting timer (${SILENCE_DURATION}ms countdown)`);
+      console.log(`[DEBUG AudioChat] Silence detected - starting timer (${SILENCE_DURATION}ms countdown), hasSpoken: ${hasSpoken}`);
 
       // Clear any existing timer just to be safe
       if (timerRef.current) {
@@ -189,7 +141,8 @@ const AudioChat = ({
 
       // Create new silence timer
       const timer = window.setTimeout(async () => {
-        console.log(`[DEBUG AudioChat] Silence timer completed - stopping recording`);
+        const duration = Date.now() - (silenceStartTime.current as number);
+        console.log(`[DEBUG AudioChat] Silence timer completed - stopping recording - duration: ${duration}ms`);
         // If we're still recording and the silence threshold was reached
         if (isRecording) {
           const audio = await stopRecording();
@@ -213,7 +166,31 @@ const AudioChat = ({
       }
       silenceStartTime.current = null;
     }
-  }, [frequencies, isRecording, stopRecording, sendAudioMessage, hasSpoken, isMounted]);
+  }, [frequencies, isRecording, stopRecording, sendAudioMessage, hasSpoken, isMounted, setIsRecording]);
+
+  // Add keyboard listener for Escape key to cancel recording
+  useEffect(() => {
+    // Only add listener when recording is active and component is mounted
+    if (!isMounted || !isRecording) return;
+
+    console.log(`[DEBUG AudioChat] Adding Escape key listener for recording cancellation`);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        console.log(`[DEBUG AudioChat] Escape key pressed, cancelling recording`);
+        cancelRecording();
+      }
+    };
+
+    // Add the event listener
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Clean up the event listener when recording stops or component unmounts
+    return () => {
+      console.log(`[DEBUG AudioChat] Removing Escape key listener`);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isRecording, isMounted]);
 
   async function toggleRecording() {
     // If not mounted yet (server rendering), don't do anything
@@ -232,48 +209,90 @@ const AudioChat = ({
 
       const audio = await stopRecording();
       sendAudioMessage(audio);
-      setIsRecording(false);
     } else {
       console.log(`[DEBUG AudioChat] Manual recording start triggered`);
       await startRecording();
-      setIsRecording(true);
       setHasSpoken(false); // Reset hasSpoken when starting a new recording
     }
   }
 
+  // Add function to cancel recording without sending audio
+  async function cancelRecording() {
+    // If not mounted yet (server rendering), don't do anything
+    if (!isMounted || !isRecording) return;
+
+    console.log(`[DEBUG AudioChat] Recording cancelled by user`);
+
+    // Clean up any timers
+    if (timerRef.current) {
+      console.log(`[DEBUG AudioChat] Clearing timer ${timerRef.current} during cancel`);
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    silenceStartTime.current = null;
+
+    // Stop recording but don't send the audio
+    await stopRecording();
+    setIsRecording(false);
+
+    console.log(`[DEBUG AudioChat] Recording cancelled, audio discarded`);
+  }
+
   return (
-    <Button
-      variant="outline"
-      size="iconSmall"
-      disabled={!isReady || isPlayingAudio} // Disable the button during audio playback
-      aria-label={isRecording ? "Stop Recording" : "Start Recording"}
-      className={cn(
-        `mb-1 me-1 [&_svg]:size-5`,
-        isRecording
-          ? "mr-4 bg-red-100 w-full h-full absolute top-0 left-0 z-10 flex justify-end px-4 hover:bg-red-200"
-          : "mr-0 border-2 border-gray-100 hover:text-black hover:bg-gray-300 hover:border-gray-300"
-      )}
-      onClick={toggleRecording}
-      suppressHydrationWarning
-    >
+    <>
       {isRecording ? (
-        <div className="flex w-full justify-between items-center gap-4 h-full" suppressHydrationWarning>
-          <AudioPlayback
-            playbackFrequencies={frequencies}
-            itemClassName="bg-red-400 w-[4px] sm:w-[6px]"
-            className="gap-[3px] w-full"
-            height={36}
-          />
-          <Button variant="stop" size="iconSmall" asChild className="mr-2" suppressHydrationWarning>
-            <div className="!size-6 h-8 w-8 p-4" suppressHydrationWarning>
+        <div
+          className={cn(
+            "mb-1 me-1 mr-4 bg-red-100 w-full h-full absolute top-0 left-0 z-10 flex justify-end px-4 hover:bg-red-200"
+          )}
+          suppressHydrationWarning
+        >
+          <div className="flex w-full justify-between items-center gap-4 h-full" suppressHydrationWarning>
+            <AudioPlayback
+              playbackFrequencies={frequencies}
+              itemClassName="bg-red-400 w-[4px] sm:w-[6px]"
+              className="gap-[3px] w-full"
+              height={36}
+            />
+            {/* Cancel button */}
+            <Button
+              variant="ghost"
+              size="iconSmall"
+              onClick={() => cancelRecording()}
+              className="mr-2 hover:bg-red-200 !size-6 h-8 w-8 p-4 rounded-full"
+              aria-label="Cancel Recording"
+              suppressHydrationWarning
+            >
+              <CloseIcon className="h-4 w-4" />
+            </Button>
+            {/* Submit button */}
+            <Button
+              variant="stop"
+              size="iconSmall"
+              onClick={() => toggleRecording()}
+              className="mr-2 !size-6 h-8 w-8 p-4"
+              suppressHydrationWarning
+            >
               <ArrowUpIcon />
-            </div>
-          </Button>
+            </Button>
+          </div>
         </div>
       ) : (
-        <MicIcon />
+        <Button
+          variant="outline"
+          size="iconSmall"
+          disabled={!isReady || isPlayingAudio}
+          aria-label="Start Recording"
+          className={cn(
+            `mb-1 me-1 [&_svg]:size-5 mr-0 border-2 border-gray-100 hover:text-black hover:bg-gray-300 hover:border-gray-300`
+          )}
+          onClick={toggleRecording}
+          suppressHydrationWarning
+        >
+          <MicIcon />
+        </Button>
       )}
-    </Button>
+    </>
   );
 };
 

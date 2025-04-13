@@ -19,26 +19,35 @@ export function useAudio() {
   // Use refs to avoid closure issues
   const isPlayingAudioRef = useRef(false);
   const stoppedManually = useRef(false);
-
-  // Keep ref in sync with state
-  useEffect(() => {
-    isPlayingAudioRef.current = isPlayingAudio;
-
-    // Emit events when isPlayingAudio changes
-    if (isPlayingAudio) {
-      console.log('[DEBUG useAudio] Emitting playback started event');
-      eventEmitter.emit(AudioEvents.PLAYBACK_STARTED);
-    } else if (!isPlayingAudio && isPlayingAudioRef.current) {
-      console.log('[DEBUG useAudio] Emitting playback ended event');
-      eventEmitter.emit(AudioEvents.PLAYBACK_ENDED);
-    }
-  }, [isPlayingAudio]);
+  const playbackEndedEmitted = useRef(false);
 
   // Add debug logging on initial state
   useEffect(() => {
     console.log('[DEBUG useAudio] Initialize - isPlayingAudio:', isPlayingAudio);
     console.log('[DEBUG useAudio] Initialize - stoppedManually:', stoppedManually.current);
   }, []);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    const previousValue = isPlayingAudioRef.current;
+    isPlayingAudioRef.current = isPlayingAudio;
+
+    // Emit events when isPlayingAudio changes from true to false
+    if (previousValue && !isPlayingAudio && !stoppedManually.current && !playbackEndedEmitted.current) {
+      console.log('[DEBUG useAudio] Emitting playback ended event from state change');
+      playbackEndedEmitted.current = true;
+
+      // Use setTimeout to ensure this happens after all state updates
+      setTimeout(() => {
+        eventEmitter.emit(AudioEvents.PLAYBACK_ENDED);
+        playbackEndedEmitted.current = false;
+      }, 10);
+    } else if (!previousValue && isPlayingAudio) {
+      console.log('[DEBUG useAudio] Emitting playback started event');
+      eventEmitter.emit(AudioEvents.PLAYBACK_STARTED);
+      playbackEndedEmitted.current = false;
+    }
+  }, [isPlayingAudio]);
 
   useEffect(() => {
     async function init() {
@@ -74,8 +83,17 @@ export function useAudio() {
           console.log('[DEBUG useAudio] Audio playback naturally ended');
           setIsPlayingAudio(false);
 
-          // We'll emit the PLAYBACK_ENDED event in the useEffect above
-          // This ensures the state is updated before the event is emitted
+          // Emit the PLAYBACK_ENDED event directly here as well
+          console.log('[DEBUG useAudio] Emitting playback ended event from getFrequencies');
+          if (!playbackEndedEmitted.current) {
+            playbackEndedEmitted.current = true;
+            eventEmitter.emit(AudioEvents.PLAYBACK_ENDED);
+
+            // Reset the flag after a short delay
+            setTimeout(() => {
+              playbackEndedEmitted.current = false;
+            }, 100);
+          }
         } else if (isPlayingAudioRef.current && stoppedManually.current) {
           console.log('[DEBUG useAudio] Audio playback manually stopped');
           setIsPlayingAudio(false);
@@ -89,6 +107,7 @@ export function useAudio() {
       if (wavPlayer.current) {
         console.log('[DEBUG useAudio] Playing new audio chunk');
         stoppedManually.current = false; // Reset the manual stop flag when new audio plays
+        playbackEndedEmitted.current = false; // Reset the emission flag
         wavPlayer.current.add16BitPCM(audio, trackId.current ?? undefined);
         setIsPlayingAudio(true);
         window.requestAnimationFrame(getFrequencies);

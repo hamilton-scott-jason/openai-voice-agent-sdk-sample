@@ -59,6 +59,7 @@ export function Composer({
             variant="primary"
             onClick={onSubmit}
             disabled={isLoading || prompt.trim() === ""}
+            suppressHydrationWarning
           >
             <ArrowUpIcon />
           </Button>

@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
+import { useEffect } from "react";
 
 import { AudioPlayback } from "@/components/AudioPlayback";
 import PauseIcon from "@/components/icons/PauseIcon";
@@ -14,13 +15,34 @@ export function Header({
   playbackFrequencies,
   stopPlaying,
   resetConversation,
-}: {
+}: Readonly<{
   agentName: string;
   playbackFrequencies: number[];
   stopPlaying: () => Promise<void>;
   resetConversation: () => void;
-}) {
+}>) {
   const showAudioPlayback = playbackFrequencies.length === 5;
+
+  // Add Escape key event listener to stop audio playback
+  useEffect(() => {
+    // Only add the listener when audio is playing
+    if (!showAudioPlayback) return;
+
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        console.log('[DEBUG Header] Escape key pressed, stopping audio playback');
+        await stopPlaying();
+      }
+    };
+
+    // Add the event listener
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Clean up when component unmounts or playback stops
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showAudioPlayback, stopPlaying]);
 
   return (
     <div className="flex flex-row gap-2 w-full relative justify-between items-center py-4 px-4">
@@ -103,6 +125,7 @@ export function Header({
                     variant="primary"
                     size="iconTiny"
                     onClick={stopPlaying}
+                    suppressHydrationWarning
                   >
                     <PauseIcon />
                   </Button>
@@ -118,6 +141,7 @@ export function Header({
           onClick={resetConversation}
           aria-label="Start new conversation"
           size="icon"
+          suppressHydrationWarning
         >
           <WriteIcon width={24} height={24} />
         </Button>
